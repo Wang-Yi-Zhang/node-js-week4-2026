@@ -29,9 +29,33 @@ const router = express.Router();
 //   2. 密碼加密可使用 bcrypt 的 genSalt 與 hash 
 //   3. 加密完成後，將新使用者（包含 id、email、加密後 password）存進 users，並 return 201 跟對應輸出訊息
 // - 注意：handler 是 async function
-/* 作答區
-router.METHOD('PATH', async (req, res) => { ... });
-*/
+router.post('/register', async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    // 1. 驗證必填欄位
+    if (!email || !password) {
+      return res.status(400).json({ status: 'false', message: '請填寫 email 與 password' });
+    }
+
+    // 2. 查重複 email
+    const exists = users.find(u => u.email === email);
+    if (exists) {
+      return res.status(400).json({ status: 'false', message: 'email 已被使用' });
+    }
+
+    // 3. bcrypt hash 密碼
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 4. 存入陣列
+    const newUser = { id: nextId++, email, password: hashedPassword };
+    users.push(newUser);
+
+    return res.status(201).json({ status: 'success', message: '註冊成功', data: { id: newUser.id, email } });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ───────────────────────────────────────────────────────────
 // TODO 任務三：POST /login
@@ -46,9 +70,34 @@ router.METHOD('PATH', async (req, res) => { ... });
 //   3. 用 jwt.sign 簽出 token，payload 帶入使用者的 id 和 email，secret 使用 process.env.JWT_SECRET，有效期設為 30 天
 //   4. token 簽出後，回應 200 跟對應輸出訊息
 // - 注意：handler 是 async function
-/* 作答區
-router.METHOD('PATH', async (req, res) => { ... });
-*/
+router.post('/login', async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    // 1. 找使用者
+    const user = users.find(u => u.email === email);
+    if (!user) {
+      return res.status(401).json({ status: 'false', message: '帳號或密碼錯誤' });
+    }
+
+    // 2. bcrypt 比對密碼
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ status: 'false', message: '帳號或密碼錯誤' });
+    }
+
+    // 3. jwt.sign 簽發 Token
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.status(200).json({ status: 'success', token });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ───────────────────────────────────────────────────────────
 // TODO 任務四：GET /me（受保護）
@@ -60,5 +109,14 @@ router.METHOD('PATH', async (req, res) => { ... });
 /* 作答區
 router.METHOD('PATH', middleware, (req, res) => { ... });
 */
+router.get('/me', verifyToken, (req, res) => {
+  // 取得使用者資料
+  const user = users.find(u => u.id === req.user.userId);
+  if (!user) {
+    return res.status(404).json({ status: 'false', message: '使用者不存在' });
+  }
+
+  return res.status(200).json({ status: 'success', user: { id: user.id, email: user.email } });
+});
 
 module.exports = router;

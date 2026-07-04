@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const dotenv = require('dotenv');
 const swaggerUi = require('swagger-ui-express');
 
 const authRouter = require('./routes/auth');
@@ -21,7 +22,16 @@ const app = express();
 //    - message：錯誤訊息
 //
 // ⚠️ **最後不需呼叫 app.listen()** — 這個部分交由 server.js 負責（分離「組裝」跟「啟動」，這樣 test.js 可以 supertest 直接戳 app、不佔 port）。
-
+app.use(cors());
+app.use(express.json());
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDoc));
+app.use('/auth', authRouter);
+app.use((req, res) => {
+  return res.status(404).json({ status: 'error', message: '路由不存在' });
+});
+
+app.use((err, req, res, next) => {
+    return res.status(500).json({ status: 'error', err: err.name, message: err.message });
+});
 
 module.exports = app;
